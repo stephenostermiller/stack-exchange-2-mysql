@@ -1,0 +1,3 @@
+#!/bin/bash
+set -e
+7z e -so -bd "$@" 2>/dev/null
