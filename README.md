@@ -2,13 +2,13 @@ This imports a Stack Exchange data dump into a MySQL database.
 
 ### Requirements
 
-- About 200 GB of free disk space, 100 for the compressed archive download and 100 for the database.
+- About 300 GB of free disk space, 100 for the archive download and 200 for the database.
 - Download a Stack Exchange data dump from https://archive.org/details/stackexchange
 - Install dependencies: `sudo apt install mysql-server python3-mysql.connector p7zip-full`
 
 ### Usage
 
-- Connect to MySQL and create a database and user for this data. For example:
+1. Connect to MySQL and create a database and user. For example:
    ```sql
    CREATE DATABASE IF NOT EXISTS stackexchange;
    CREATE USER IF NOT EXISTS 'stackexchange'@'%' IDENTIFIED WITH mysql_native_password  BY 'my-password';
@@ -16,10 +16,9 @@ This imports a Stack Exchange data dump into a MySQL database.
    GRANT SESSION_VARIABLES_ADMIN ON *.* TO 'stackexchange'@'%';
    FLUSH PRIVILEGES;
    ```
-- Copy `default.ini` to `local.ini` and edit it with your database info.
-- The list of sites must be loaded first because all other data depends on it: `./load.py /stackexchange/Sites.xml`
-- Then load any or all of the other files. e.g. `./load.py /stackexchange/*.7z` or `./load.py /stackexchange/drones.stackexchange.com.7z`
-- NOTE: MySQL can use a lot of disk space for query logs. By default, it usually has binary logging enabled and those logs are kept for 30 days. You might want to [disable binary logging](https://dba.stackexchange.com/questions/72770/disable-mysql-binary-logging-with-log-bin-variable) or periodically delete the logs with the SQL: `PURGE BINARY LOGS BEFORE NOW();`
+1. Copy `default.ini` to `local.ini` and edit it with your database info.
+1. The list of sites must be loaded first because all other data depends on it: `./load.py /stackexchange/Sites.xml`
+1. Then load any or all of the other files. e.g. `./load.py /stackexchange/*.7z` or `./load.py /stackexchange/drones.stackexchange.com.7z`
 
 ### Features
 
@@ -28,7 +27,19 @@ This imports a Stack Exchange data dump into a MySQL database.
 - Data is committed to to the database in batches which makes it go much faster.
 - All Stack Exchange sites are loaded into a **single** database. Each table uses a `SiteId` identifier as part of its primary key.
 - `ENUM`s are used for all integer discriminator columns.
-- `BIGINT`s are used for all keys
+- `BIGINT`s are used for all numeric values
 - All text columns are specified as `UTF-8`, specifically `CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`: 4 byte UTF-8 with case insensitive unicode sorting order.
 - Uses compression within MySQL to minimize disk space usage.
 
+### Advanced Usage
+
+- You can specify specific tables to load instead of loading all the tables: `./load.py /stackexchange/drones.stackexchange.com.7z Posts Users`. Data from other tables (`Badges`, `Comments`, `PostHistory`, `PostLinks`, `Tags`, and `Votes`) will be skipped.
+- If you need to interrupt the load and want to resume from where it left off, you can specify the resume point: `./load.py /stackexchange/drones.stackexchange.com.7z "drones PostHistory 4129"`
+
+### FAQ
+
+#### How long does it take?
+Loading the full dump can take several days. Loading just a small site (such as "drones") can be done in seconds.
+
+#### When was this last tested?
+This was tested with the June 2022 data dump on Ubuntu 20.04.4 LTS with MySQL 8.0.29.
