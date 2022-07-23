@@ -13,8 +13,11 @@ This imports a Stack Exchange data dump into a MySQL database.
    CREATE DATABASE IF NOT EXISTS stackexchange;
    CREATE USER IF NOT EXISTS 'stackexchange'@'%' IDENTIFIED WITH mysql_native_password  BY 'my-password';
    GRANT ALL ON stackexchange.* TO 'stackexchange'@'%';
-   GRANT SESSION_VARIABLES_ADMIN ON *.* TO 'stackexchange'@'%';
-   FLUSH PRIVILEGES;
+   ```
+1. Configure the new database not to keep binary logs. These logs required several times the amount of disk space as the actual data:
+   ```sh
+   echo -e '[mysqld]\nbinlog-ignore-db=stackexchange' | sudo tee /etc/mysql/conf.d/stackexchange.cnf
+   sudo service mysql restart
    ```
 1. Copy `default.ini` to `local.ini` and edit it with your database info.
 1. The list of sites must be loaded first because all other data depends on it: `./load.py /stackexchange/Sites.xml`

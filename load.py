@@ -25,7 +25,8 @@ def addSiteId(data, context):
 
 tables={
 	"sites":{
-		"name": "Sites"
+		"name": "Sites",
+		"onLoad": db.createTablesWithSiteId
 	},
 	"badges":{
 		"name": "Badges",
@@ -108,7 +109,9 @@ def loadLine(line, context):
 	if (not line or re.search(r'^.?<\?xml', line, re.IGNORECASE)):
 		pass
 	elif (re.match(r'^\s*</', line)):
-		context['table']=None
+		if "onLoad" in context['table']:
+			context['table']["onLoad"]()
+		context['table'] = None
 	elif (m := re.match(r'^\s*<([a-z]+)>', line)):
 		if m[1] in tables:
 			context['table']=tables[m[1]]
