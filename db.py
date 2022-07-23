@@ -73,7 +73,7 @@ def createTablesWithSiteId():
         "  CreationDate DATETIME NOT NULL,"
         "  UserId BIGINT,"
         "  UserDisplayName VARCHAR(255),"
-        "  ContentLicense enum("+contentLicenseVals+") NOT NULL,"
+        "  ContentLicense ENUM ("+contentLicenseVals+") NOT NULL,"
         "  PRIMARY KEY(SiteId, Id),"
         "  INDEX (SiteId, PostId)"
         ") " + tableOptions
@@ -146,7 +146,7 @@ def createTablesWithSiteId():
         "  UserDisplayName VARCHAR(255),"
         "  Comment VARCHAR(1023),"
         "  Text MEDIUMBLOB,"
-        "  ContentLicense enum("+contentLicenseVals+") NOT NULL,"
+        "  ContentLicense ENUM ("+contentLicenseVals+") NOT NULL,"
         "  PRIMARY KEY(SiteId, Id),"
         "  INDEX (SiteId, PostId)"
         ") " + tableOptions
@@ -206,7 +206,7 @@ def createTablesWithSiteId():
         "  FavoriteCount BIGINT,"
         "  ClosedDate DATETIME,"
         "  CommunityOwnedDate DATETIME,"
-        "  ContentLicense enum("+contentLicenseVals+"),"
+        "  ContentLicense ENUM ("+contentLicenseVals+"),"
         "  PRIMARY KEY(SiteId, Id),"
         "  INDEX (SiteId, ParentId)"
         ") " + tableOptions
