@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 
-import db
+from lib import db
+from lib import xmlline
 import sys
-import xmlline
 import re
 import subprocess
 
@@ -181,7 +181,7 @@ def loadXml(context, fileName):
 def loadXml7z(context, fileName):
 	print("Loading zipped XML: " + fileName)
 	setSiteContext(context, fileName)
-	process = subprocess.Popen(["./7zcat", fileName], stdout=subprocess.PIPE)
+	process = subprocess.Popen(["7z", "e", "-so", "-bd", fileName], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 	try:
 		while line := process.stdout.readline():
 			try:

@@ -1,5 +1,5 @@
 import mysql.connector
-import localConfig
+from lib import localConfig
 import re
 
 dbConf = localConfig.getDict('mysql')
