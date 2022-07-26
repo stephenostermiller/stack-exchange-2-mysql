@@ -8,13 +8,13 @@ This imports a Stack Exchange data dump into a MySQL database.
 
 ### Usage
 
-1. Connect to MySQL and create a database and user. For example:
+1. Connect to MySQL and create a database and user. Make sure you use a unique password rather than just copying this exactly:
    ```sql
    CREATE DATABASE IF NOT EXISTS stackexchange;
    CREATE USER IF NOT EXISTS 'stackexchange'@'%' IDENTIFIED WITH mysql_native_password  BY 'my-password';
    GRANT ALL ON stackexchange.* TO 'stackexchange'@'%';
    ```
-1. Configure the new database not to keep binary logs. These logs required several times the amount of disk space as the actual data:
+1. Configure the new database not to keep binary logs. These logs would require several times the amount of disk space.
    ```sh
    echo -e '[mysqld]\nbinlog-ignore-db=stackexchange' | sudo tee /etc/mysql/conf.d/stackexchange.cnf
    sudo service mysql restart
