@@ -1,4 +1,6 @@
 import configparser
+import os.path as path
+
 config = configparser.ConfigParser()
 
 def getDict(section):
@@ -8,5 +10,7 @@ def getDict(section):
     return data
 
 
-config.read('default.ini')
-config.read('local.ini')
+projectRoot = path.dirname(path.dirname(path.abspath(__file__)))
+
+config.read(path.join(projectRoot, 'default.ini'))
+config.read(path.join(projectRoot, 'local.ini'))
