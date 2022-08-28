@@ -9,63 +9,65 @@ cnx = mysql.connector.connect(
     host=dbConf['host'],
     database=dbConf['database'],
     port=dbConf['port'],
-    auth_plugin=dbConf['auth_plugin']
+    auth_plugin=dbConf['auth_plugin'],
+    charset='utf8mb4',
+    use_unicode=True
 )
 
-# Stack Exchange schema documentation
-# https://meta.stackexchange.com/questions/2677/database-schema-documentation-for-the-public-data-dump-and-sede
+def createSchema():
+    # Stack Exchange schema documentation
+    # https://meta.stackexchange.com/questions/2677/database-schema-documentation-for-the-public-data-dump-and-sede
 
-tableOptions="ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMPRESSION='ZLIB';"
+    tableOptions="ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMPRESSION='ZLIB';"
 
-cnx.cursor().execute(
-    "CREATE TABLE IF NOT EXISTS Sites ("
-    "  Id SMALLINT PRIMARY KEY NOT NULL,"
-    "  ParentId BIGINT,"
-    "  TinyName VARCHAR(63) NOT NULL,"
-    "  Name VARCHAR(127) NOT NULL,"
-    "  LongName VARCHAR(255),"
-    "  Url VARCHAR(255) NOT NULL,"
-    "  ImageUrl VARCHAR(255),"
-    "  IconUrl VARCHAR(255),"
-    "  DatabaseName VARCHAR(63),"
-    "  Tagline VARCHAR(511),"
-    "  TagCss VARCHAR(1023),"
-    "  ODataEndpoint VARCHAR(255),"
-    "  BadgeIconUrl VARCHAR(255),"
-    "  ImageBackgroundColor VARCHAR(255),"
-    "  TotalQuestions BIGINT,"
-    "  TotalAnswers BIGINT,"
-    "  TotalUsers BIGINT,"
-    "  TotalComments BIGINT,"
-    "  TotalTags BIGINT,"
-    "  LastPost DATETIME"
-    ") " + tableOptions
-)
-
-def createTablesWithSiteId():
-
-    siteEnumVals = "'" + "','".join(querySites()) + "'"
-    updateSiteEnums = "ALTER TABLE %s MODIFY COLUMN SiteId ENUM ("+siteEnumVals+") NOT NULL, ALGORITHM=INPLACE, LOCK=NONE;"
     contentLicenseVals="'CC BY-SA 2.5','CC BY-SA 3.0','CC BY-SA 4.0'"
 
     cnx.cursor().execute(
+        "CREATE TABLE IF NOT EXISTS Sites ("
+        "  Id BIGINT PRIMARY KEY NOT NULL,"
+        "  ParentId BIGINT,"
+        "  TinyName VARCHAR(63) NOT NULL,"
+        "  Name VARCHAR(127) NOT NULL,"
+        "  LongName VARCHAR(255),"
+        "  Url VARCHAR(255) NOT NULL,"
+        "  ImageUrl VARCHAR(255),"
+        "  IconUrl VARCHAR(255),"
+        "  DatabaseName VARCHAR(63),"
+        "  Tagline VARCHAR(511),"
+        "  TagCss VARCHAR(1023),"
+        "  ODataEndpoint VARCHAR(255),"
+        "  BadgeIconUrl VARCHAR(255),"
+        "  ImageBackgroundColor VARCHAR(255),"
+        "  TotalQuestions BIGINT,"
+        "  TotalAnswers BIGINT,"
+        "  TotalUsers BIGINT,"
+        "  TotalComments BIGINT,"
+        "  TotalTags BIGINT,"
+        "  LastPost DATETIME,"
+        "  UNIQUE INDEX (TinyName),"
+        "  UNIQUE INDEX (Name),"
+        "  UNIQUE INDEX (LongName),"
+        "  UNIQUE INDEX (Url)"
+        ") " + tableOptions
+    )
+
+    cnx.cursor().execute(
         "CREATE TABLE IF NOT EXISTS Badges ("
-        "  SiteId ENUM ("+siteEnumVals+") NOT NULL,"
+        "  SiteId BIGINT NOT NULL,"
         "  Id BIGINT NOT NULL,"
         "  UserId BIGINT NOT NULL,"
         "  Name VARCHAR(255) NOT NULL,"
         "  Date DATETIME NOT NULL,"
         "  Class BIGINT NOT NULL,"
         "  TagBased BOOLEAN NOT NULL,"
-        "  PRIMARY KEY(SiteId, Id),"
+        "  PRIMARY KEY (SiteId, Id),"
         "  INDEX (SiteId, UserId)"
         ") " + tableOptions
     )
-    cnx.cursor().execute(updateSiteEnums % "Badges")
 
     cnx.cursor().execute(
         "CREATE TABLE IF NOT EXISTS Comments ("
-        "  SiteId ENUM ("+siteEnumVals+") NOT NULL,"
+        "  SiteId BIGINT NOT NULL,"
         "  Id BIGINT NOT NULL,"
         "  PostId BIGINT NOT NULL,"
         "  Score BIGINT NOT NULL,"
@@ -78,67 +80,59 @@ def createTablesWithSiteId():
         "  INDEX (SiteId, PostId)"
         ") " + tableOptions
     )
-    cnx.cursor().execute(updateSiteEnums % "Comments")
+
+    cnx.cursor().execute(
+        "CREATE TABLE IF NOT EXISTS PostHistoryTypes ("
+        "  Id BIGINT PRIMARY KEY,"
+        "  Name VARCHAR(255),"
+        "  Stage ENUM('Initial','Edit','Rollback'),"
+        "  Field ENUM('Title','Body','Tags')"
+        ") " + tableOptions
+    )
+    for data in [
+        [1,'Initial Title','Initial','Title'],
+        [2,'Initial Body','Initial','Body'],
+        [3,'Initial Tags','Initial','Tags'],
+        [4,'Edit Title','Edit','Title'],
+        [5,'Edit Body','Edit','Body'],
+        [6,'Edit Tags','Edit','Tags'],
+        [7,'Rollback Title','Rollback','Title'],
+        [8,'Rollback Body','Rollback','Body'],
+        [9,'Rollback Tags','Rollback','Tags'],
+        [10,'Post Closed'],
+        [11,'Post Reopened'],
+        [12,'Post Deleted'],
+        [13,'Post Undeleted'],
+        [14,'Post Locked'],
+        [15,'Post Unlocked'],
+        [16,'Community Owned'],
+        [17,'Post Migrated'],
+        [18,'Question Merged'],
+        [19,'Question Protected'],
+        [20,'Question Unprotected'],
+        [21,'Post Disassociated'],
+        [22,'Question Unmerged'],
+        [24,'Suggested Edit Applied'],
+        [25,'Post Tweeted'],
+        [31,'Comment discussion moved to chat'],
+        [33,'Post notice added '],
+        [34,'Post notice removed'],
+        [35,'Post migrated away'],
+        [36,'Post migrated here'],
+        [37,'Post merge source'],
+        [38,'Post merge destination'],
+        [50,'Bumped by Community User'],
+        [52,'Question became hot'],
+        [53,'Question removed from hot']
+    ]:
+        upsert("PostHistoryTypes", {"Id":data[0], "Name":data[1], "Stage":(data[2] if len(data)>2 else None), "Field":(data[3] if len(data)>3 else None)})
+    cnx.commit()
 
     cnx.cursor().execute(
         "CREATE TABLE IF NOT EXISTS PostHistory ("
-        "  SiteId ENUM ("+siteEnumVals+") NOT NULL,"
+        "  SiteId BIGINT NOT NULL,"
         "  Id BIGINT NOT NULL,"
-        "  PostHistoryTypeId ENUM("
-        "    'Initial Title',"
-        "    'Initial Body',"
-        "    'Initial Tags',"
-        "    'Edit Title',"
-        "    'Edit Body',"
-        "    'Edit Tags',"
-        "    'Rollback Title',"
-        "    'Rollback Body',"
-        "    'Rollback Tags',"
-        "    'Post Closed',"
-        "    'Post Reopened',"
-        "    'Post Deleted',"
-        "    'Post Undeleted',"
-        "    'Post Locked',"
-        "    'Post Unlocked',"
-        "    'Community Owned',"
-        "    'Post Migrated',"
-        "    'Question Merged',"
-        "    'Question Protected',"
-        "    'Question Unprotected',"
-        "    'Post Disassociated',"
-        "    'Question Unmerged',"
-        "    '23',"
-        "    'Suggested Edit Applied',"
-        "    'Post Tweeted',"
-        "    '26',"
-        "    '27',"
-        "    '28',"
-        "    '29',"
-        "    '30',"
-        "    'Comment discussion moved to chat',"
-        "    '32',"
-        "    'Post notice added ',"
-        "    'Post notice removed',"
-        "    'Post migrated away',"
-        "    'Post migrated here',"
-        "    'Post merge source',"
-        "    'Post merge destination',"
-        "    '39',"
-        "    '40',"
-        "    '41',"
-        "    '42',"
-        "    '43',"
-        "    '44',"
-        "    '45',"
-        "    '46',"
-        "    '47',"
-        "    '48',"
-        "    '49',"
-        "    'Bumped by Community User',"
-        "    '51',"
-        "    'Question became hot',"
-        "    'Question removed from hot'"
-        "  ) NOT NULL,"
+        "  PostHistoryTypeId BIGINT NOT NULL,"
         "  PostId BIGINT NOT NULL,"
         "  RevisionGUID VARCHAR(63) NOT NULL,"
         "  CreationDate DATETIME NOT NULL,"
@@ -151,41 +145,58 @@ def createTablesWithSiteId():
         "  INDEX (SiteId, PostId)"
         ") " + tableOptions
     )
-    cnx.cursor().execute(updateSiteEnums % "PostHistory")
+
+    cnx.cursor().execute(
+        "CREATE TABLE IF NOT EXISTS PostLinkTypes ("
+        "  Id BIGINT PRIMARY KEY,"
+        "  Name VARCHAR(255)"
+        ") " + tableOptions
+    )
+    for data in [
+        [1,'Linked'],
+        [3,'Duplicate']
+    ]:
+        upsert("PostLinkTypes", {"Id":data[0], "Name":data[1]})
+    cnx.commit()
 
     cnx.cursor().execute(
         "CREATE TABLE IF NOT EXISTS PostLinks ("
-        "  SiteId ENUM ("+siteEnumVals+") NOT NULL,"
+        "  SiteId BIGINT NOT NULL,"
         "  Id BIGINT NOT NULL,"
         "  CreationDate DATETIME NOT NULL,"
         "  PostId BIGINT NOT NULL,"
         "  RelatedPostId BIGINT NOT NULL,"
-        "  LinkTypeId ENUM("
-        "    'Linked',"
-        "    '2',"
-        "    'Duplicate'"
-        "  ) NOT NULL,"
+        "  LinkTypeId BIGINT NOT NULL,"
         "  PRIMARY KEY(SiteId, Id),"
         "  INDEX (SiteId, PostId)"
         ") " + tableOptions
     )
-    cnx.cursor().execute(updateSiteEnums % "PostLinks")
+
+    cnx.cursor().execute(
+        "CREATE TABLE IF NOT EXISTS PostTypes ("
+        "  Id BIGINT PRIMARY KEY,"
+        "  Name VARCHAR(255)"
+        ") " + tableOptions
+    )
+    for data in [
+        [1,'Question'],
+        [2,'Answer'],
+        [3,'Orphaned tag wiki'],
+        [4,'Tag wiki excerpt'],
+        [5,'Tag wiki'],
+        [6,'Moderator nomination'],
+        [7,'Wiki placeholder'],
+        [8,'Privilege wiki'],
+        [9,'Linked']
+    ]:
+        upsert("PostTypes", {"Id":data[0], "Name":data[1]})
+    cnx.commit()
 
     cnx.cursor().execute(
         "CREATE TABLE IF NOT EXISTS Posts ("
-        "  SiteId ENUM ("+siteEnumVals+") NOT NULL,"
+        "  SiteId BIGINT NOT NULL,"
         "  Id BIGINT NOT NULL,"
-        "  PostTypeId ENUM("
-        "    'Question',"
-        "    'Answer',"
-        "    'Orphaned tag wiki',"
-        "    'Tag wiki excerpt',"
-        "    'Tag wiki',"
-        "    'Moderator nomination',"
-        "    'Wiki placeholder',"
-        "    'Privilege wiki',"
-        "    'Linked'"
-        "  ) NOT NULL,"
+        "  PostTypeId BIGINT NOT NULL,"
         "  AcceptedAnswerId BIGINT,"
         "  ParentId BIGINT,"
         "  CreationDate DATETIME NOT NULL,"
@@ -211,11 +222,10 @@ def createTablesWithSiteId():
         "  INDEX (SiteId, ParentId)"
         ") " + tableOptions
     )
-    cnx.cursor().execute(updateSiteEnums % "Posts")
 
     cnx.cursor().execute(
         "CREATE TABLE IF NOT EXISTS Tags ("
-        "  SiteId ENUM ("+siteEnumVals+") NOT NULL,"
+        "  SiteId BIGINT NOT NULL,"
         "  Id BIGINT NOT NULL,"
         "  TagName VARCHAR(63),"
         "  Count BIGINT NOT NULL,"
@@ -227,11 +237,10 @@ def createTablesWithSiteId():
         "  INDEX (SiteId, TagName)"
         ") " + tableOptions
     )
-    cnx.cursor().execute(updateSiteEnums % "Tags")
 
     cnx.cursor().execute(
         "CREATE TABLE IF NOT EXISTS Users ("
-        "  SiteId ENUM ("+siteEnumVals+") NOT NULL,"
+        "  SiteId BIGINT NOT NULL,"
         "  Id BIGINT NOT NULL,"
         "  Reputation BIGINT NOT NULL,"
         "  CreationDate DATETIME NOT NULL,"
@@ -249,31 +258,38 @@ def createTablesWithSiteId():
         "  PRIMARY KEY(SiteId, Id)"
         ") " + tableOptions
     )
-    cnx.cursor().execute(updateSiteEnums % "Users")
+
+    cnx.cursor().execute(
+        "CREATE TABLE IF NOT EXISTS VoteTypes ("
+        "  Id BIGINT PRIMARY KEY,"
+        "  Name VARCHAR(255)"
+        ") " + tableOptions
+    )
+    for data in [
+        [1,'AcceptedByOriginator'],
+        [2,'UpMod'],
+        [3,'DownMod'],
+        [4,'Offensive'],
+        [5,'Favorite'],
+        [6,'Close'],
+        [7,'Reopen'],
+        [8,'BountyStart'],
+        [9,'BountyClose'],
+        [10,'Deletion'],
+        [11,'Undeletion'],
+        [12,'Spam'],
+        [15,'ModeratorReview'],
+        [16,'ApproveEditSuggestion']
+    ]:
+        upsert("VoteTypes", {"Id":data[0], "Name":data[1]})
+    cnx.commit()
 
     cnx.cursor().execute(
         "CREATE TABLE IF NOT EXISTS Votes ("
-        "  SiteId ENUM ("+siteEnumVals+") NOT NULL,"
+        "  SiteId BIGINT NOT NULL,"
         "  Id BIGINT NOT NULL,"
         "  PostId BIGINT NOT NULL,"
-        "  VoteTypeId ENUM("
-        "    'AcceptedByOriginator',"
-        "    'UpMod',"
-        "    'DownMod',"
-        "    'Offensive',"
-        "    'Favorite',"
-        "    'Close',"
-        "    'Reopen',"
-        "    'BountyStart',"
-        "    'BountyClose',"
-        "    'Deletion',"
-        "    'Undeletion',"
-        "    'Spam',"
-        "    '13',"
-        "    '14',"    
-        "    'ModeratorReview',"
-        "    'ApproveEditSuggestion'"
-        "  ) NOT NULL,"
+        "  VoteTypeId BIGINT NOT NULL,"
         "  UserId BIGINT,"
         "  CreationDate DATETIME NOT NULL,"
         "  BountyAmount BIGINT,"
@@ -281,7 +297,267 @@ def createTablesWithSiteId():
         "  INDEX (SiteId, PostId)"
         ") " + tableOptions
     )
-    cnx.cursor().execute(updateSiteEnums % "Votes")
+    
+    cnx.cursor().execute(
+        "CREATE OR REPLACE VIEW FullSites AS"
+        "  SELECT"
+        "    site.*,"
+        "    parent.TinyName AS ParentTinyName,"
+        "    parent.Name AS ParentName,"
+        "    parent.LongName AS ParentLongName,"
+        "    parent.Url AS ParentUrl,"
+        "    parent.ImageUrl AS ParentImageUrl,"
+        "    parent.IconUrl AS ParentIconUrl,"
+        "    parent.DatabaseName AS ParentDatabaseName,"
+        "    parent.Tagline AS ParentTagline,"
+        "    parent.TagCss AS ParentTagCss,"
+        "    parent.ODataEndpoint AS ParentODataEndpoint,"
+        "    parent.BadgeIconUrl AS ParentBadgeIconUrl,"
+        "    parent.ImageBackgroundColor AS ParentImageBackgroundColor,"
+        "    parent.TotalQuestions AS ParentTotalQuestions,"
+        "    parent.TotalAnswers AS ParentTotalAnswers,"
+        "    parent.TotalUsers AS ParentTotalUsers,"
+        "    parent.TotalComments AS ParentTotalComments,"
+        "    parent.TotalTags AS ParentTotalTags,"
+        "    parent.LastPost AS ParentLastPost"
+        "  FROM"
+        "    Sites site"
+        "  LEFT JOIN"
+        "    Sites parent"
+        "  ON"
+        "    site.ParentId = parent.Id"
+    )
+
+    cnx.cursor().execute(
+        "CREATE OR REPLACE VIEW FullBadges AS"
+        "  SELECT"
+        "    badge.*,"
+        "    site.TinyName AS SiteTinyName,"
+        "    site.Name AS SiteName,"
+        "    site.LongName AS SiteLongName,"
+        "    site.Url AS SiteUrl,"
+        "    user.Reputation AS UserReputation,"
+        "    user.CreationDate AS UserCreationDate,"
+        "    user.DisplayName AS UserDisplayName,"
+        "    user.LastAccessDate AS UserLastAccessDate,"
+        "    user.Views AS UserViews,"
+        "    user.UpVotes AS UserUpVotes,"
+        "    user.DownVotes AS UserDownVotes,"
+        "    user.AccountId AS UserAccountId"
+        "  FROM"
+        "    Badges badge"
+        "  LEFT JOIN"
+        "    Sites site"
+        "  ON"
+        "    badge.SiteId = site.Id"
+        "  LEFT JOIN"
+        "    Users user"
+        "  ON"
+        "    badge.UserId = user.Id AND"
+        "    badge.SiteId = user.SiteId"
+    )
+
+    cnx.cursor().execute(
+        "CREATE OR REPLACE VIEW FullComments AS"
+        "  SELECT"
+        "    comment.SiteId,"
+        "    comment.Id,"
+        "    comment.PostId,"
+        "    comment.Score,"
+        "    comment.Text,"
+        "    comment.CreationDate,"
+        "    comment.UserId,"
+        "    comment.ContentLicense,"
+        "    site.TinyName AS SiteTinyName,"
+        "    site.Name AS SiteName,"
+        "    site.LongName AS SiteLongName,"
+        "    site.Url AS SiteUrl,"
+        "    user.Reputation AS UserReputation,"
+        "    user.CreationDate AS UserCreationDate,"
+        "    COALESCE(user.DisplayName, comment.UserDisplayName) AS UserDisplayName,"
+        "    user.LastAccessDate AS UserLastAccessDate,"
+        "    user.Views AS UserViews,"
+        "    user.UpVotes AS UserUpVotes,"
+        "    user.DownVotes AS UserDownVotes,"
+        "    user.AccountId AS UserAccountId"
+        "  FROM"
+        "    Comments comment"
+        "  LEFT JOIN"
+        "    Sites site"
+        "  ON"
+        "    comment.SiteId = site.Id"
+        "  LEFT JOIN"
+        "    Users user"
+        "  ON"
+        "    comment.UserId = user.Id AND"
+        "    comment.SiteId = user.SiteId"
+    )
+
+    cnx.cursor().execute(
+        "CREATE OR REPLACE VIEW FullPostHistory AS"
+        "  SELECT"
+        "    postHistory.SiteId,"
+        "    site.TinyName AS SiteTinyName,"
+        "    site.Name AS SiteName,"
+        "    site.LongName AS SiteLongName,"
+        "    site.Url AS SiteUrl,"
+        "    postHistory.Id,"
+        "    postHistory.PostHistoryTypeId,"
+        "    postHistoryType.Name AS PostHistoryTypeName,"
+        "    postHistoryType.Stage AS PostHistoryTypeStage,"
+        "    postHistoryType.Field AS PostHistoryTypeField,"
+        "    postHistory.PostId,"
+        "    postHistory.RevisionGUID,"
+        "    postHistory.CreationDate,"
+        "    postHistory.UserId,"
+        "    user.Reputation AS UserReputation,"
+        "    user.CreationDate AS UserCreationDate,"
+        "    COALESCE(user.DisplayName, postHistory.UserDisplayName) AS UserDisplayName,"
+        "    user.LastAccessDate AS UserLastAccessDate,"
+        "    user.Views AS UserViews,"
+        "    user.UpVotes AS UserUpVotes,"
+        "    user.DownVotes AS UserDownVotes,"
+        "    user.AccountId AS UserAccountId,"
+        "    postHistory.Comment,"
+        "    postHistory.Text,"
+        "    postHistory.ContentLicense"
+        "  FROM"
+        "    PostHistory postHistory"
+        "  LEFT JOIN"
+        "    Sites site"
+        "  ON"
+        "    postHistory.SiteId = site.Id"
+        "  LEFT JOIN"
+        "    PostHistoryTypes postHistoryType"
+        "  ON"
+        "    postHistory.PostHistoryTypeId = postHistoryType.Id"
+        "  LEFT JOIN"
+        "    Users user"
+        "  ON"
+        "    postHistory.UserId = user.Id AND"
+        "    postHistory.SiteId = user.SiteId"
+    )
+
+    cnx.cursor().execute(
+        "CREATE OR REPLACE VIEW FullPostLinks AS"
+        "  SELECT"
+        "    postLink.*,"
+        "    site.TinyName AS SiteTinyName,"
+        "    site.Name AS SiteName,"
+        "    site.LongName AS SiteLongName,"
+        "    site.Url AS SiteUrl,"
+        "    postLinkType.Name AS LinkTypeName"
+        "  FROM"
+        "    PostLinks postLink"
+        "  LEFT JOIN"
+        "    Sites site"
+        "  ON"
+        "    postLink.SiteId = site.Id"
+        "  LEFT JOIN"
+        "    PostLinkTypes postLinkType"
+        "  ON"
+        "    postLink.LinkTypeId = postLinkType.Id"
+    )
+
+    cnx.cursor().execute(
+        "CREATE OR REPLACE VIEW FullPosts AS"
+        "  SELECT"
+        "    post.SiteId,"
+        "    post.Id,"
+        "    post.PostTypeId,"
+        "    post.AcceptedAnswerId,"
+        "    post.ParentId,"
+        "    post.CreationDate,"
+        "    post.DeletionDate,"
+        "    post.Score,"
+        "    post.ViewCount,"
+        "    post.Body,"
+        "    post.OwnerUserId,"
+        "    post.LastEditorUserId,"
+        "    post.LastEditDate,"
+        "    post.LastActivityDate,"
+        "    post.Title,"
+        "    post.Tags,"
+        "    post.AnswerCount,"
+        "    post.CommentCount,"
+        "    post.FavoriteCount,"
+        "    post.ClosedDate,"
+        "    post.CommunityOwnedDate,"
+        "    post.ContentLicense,"
+        "    site.TinyName AS SiteTinyName,"
+        "    site.Name AS SiteName,"
+        "    site.LongName AS SiteLongName,"
+        "    site.Url AS SiteUrl,"
+        "    owner.Reputation AS OwnerReputation,"
+        "    owner.CreationDate AS OwnerCreationDate,"
+        "    COALESCE(owner.DisplayName, post.OwnerDisplayName) AS OwnerDisplayName,"
+        "    owner.LastAccessDate AS OwnerLastAccessDate,"
+        "    owner.Views AS OwnerViews,"
+        "    owner.UpVotes AS OwnerUpVotes,"
+        "    owner.DownVotes AS OwnerDownVotes,"
+        "    owner.AccountId AS OwnerAccountId,"
+        "    lastEditor.Reputation AS LastEditorReputation,"
+        "    lastEditor.CreationDate AS LastEditorCreationDate,"
+        "    COALESCE(lastEditor.DisplayName, post.LastEditorDisplayName) AS LastEditorDisplayName,"
+        "    lastEditor.LastAccessDate AS LastEditorLastAccessDate,"
+        "    lastEditor.Views AS LastEditorViews,"
+        "    lastEditor.UpVotes AS LastEditorUpVotes,"
+        "    lastEditor.DownVotes AS LastEditorDownVotes,"
+        "    lastEditor.AccountId AS LastEditorAccountId,"
+        "    postType.Name AS PostTypeName"
+        "  FROM"
+        "    Posts post"
+        "  LEFT JOIN"
+        "    Sites site"
+        "  ON"
+        "   post.siteId = site.Id"
+        "  LEFT JOIN"
+        "    Users owner"
+        "  ON"
+        "    post.OwnerUserId = owner.Id AND"
+        "    post.SiteId = owner.SiteId"
+        "  LEFT JOIN"
+        "    Users lastEditor"
+        "  ON"
+        "    post.OwnerUserId = lastEditor.Id AND"
+        "    post.SiteId = lastEditor.SiteId"
+        "  LEFT JOIN"
+        "    PostTypes postType"
+        "  ON"
+        "    post.PostTypeId = postType.Id"
+    )
+
+    cnx.cursor().execute(
+        "CREATE OR REPLACE VIEW FullTags AS"
+        "  SELECT"
+        "    tag.*,"
+        "    site.TinyName AS SiteTinyName,"
+        "    site.Name AS SiteName,"
+        "    site.LongName AS SiteLongName,"
+        "    site.Url AS SiteUrl"
+        "  FROM"
+        "    Tags tag"
+        "  LEFT JOIN"
+        "    Sites site"
+        "  ON"
+        "    tag.SiteId = site.Id"
+    )
+
+    cnx.cursor().execute(
+        "CREATE OR REPLACE VIEW FullUsers AS"
+        "  SELECT"
+        "    user.*,"
+        "    site.TinyName AS SiteTinyName,"
+        "    site.Name AS SiteName,"
+        "    site.LongName AS SiteLongName,"
+        "    site.Url AS SiteUrl"
+        "  FROM"
+        "    Users user"
+        "  LEFT JOIN"
+        "    Sites site"
+        "  ON"
+        "    user.SiteId = site.Id"
+    )
 
 def checkColumnNames(data):
     for name in data.keys():

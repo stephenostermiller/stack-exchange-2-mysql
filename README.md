@@ -26,13 +26,13 @@ This imports a Stack Exchange data dump into a MySQL database.
 ### Features
 
 - Automatically creates the database schema.
-- All data loaded with `upsert`s. The same data can be loaded multiple times and will just overwrite itself. A newer version of the Stack Exchange dump can be imported on top of the old one and all the records will get updated.
-- Data is committed to to the database in batches which makes it go much faster.
-- All Stack Exchange sites are loaded into a **single** database. Each table uses a `SiteId` identifier as part of its primary key.
-- `ENUM`s are used for all integer discriminator columns.
-- `BIGINT`s are used for all numeric values
-- All text columns are specified as `UTF-8`, specifically `CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`: 4 byte UTF-8 with case insensitive unicode sorting order.
-- Uses compression within MySQL to minimize disk space usage.
+- Loads all data with `upsert`s. The same data can be loaded multiple times and will just overwrite itself. A newer version of the Stack Exchange dump can be imported on top of the old one and all the records will get updated.
+- Commits data to to the database in batches which makes it go much faster.
+- Uses a **single** database for all Stack Exchange sites. Each table uses a `SiteId` identifier as part of its primary key.
+- Provides materialized views (`FullPosts`, `FullUsers`, `FullBadges`, etc) for all integer discriminator columns (`SiteId`, `PostTypeId`, etc).
+- Uses `BIGINT`s for all numeric values
+- Specifies all text columns as 4 byte `UTF-8` with case insensitive unicode sorting order.
+- Enables compression within MySQL to minimize disk space usage.
 
 ### Advanced Usage
 

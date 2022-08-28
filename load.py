@@ -5,6 +5,7 @@ from lib import xmlline
 import sys
 import re
 import subprocess
+import requests
 
 def string2Bool(s):
 	return s.lower() in ['true', '1', 't', 'y', 'yes']
@@ -25,8 +26,7 @@ def addSiteId(data, context):
 
 tables={
 	"sites":{
-		"name": "Sites",
-		"onLoad": db.createTablesWithSiteId
+		"name": "Sites"
 	},
 	"badges":{
 		"name": "Badges",
@@ -178,6 +178,24 @@ def loadXml(context, fileName):
 	finally:
 		fh.close()
 
+def loadXmlUrl(context, url):
+	print("Loading XML: " + url)
+	setSiteContext(context, url)
+	req = requests.get(url, stream=True)
+
+	if req.encoding is None:
+		req.encoding = 'utf-8'
+
+	try:
+		for line in req.iter_lines(decode_unicode=True):
+			try:
+				loadLine(line.strip(), context)
+			except:
+				print(line)
+				raise
+	finally:
+		req.close()
+
 def loadXml7z(context, fileName):
 	print("Loading zipped XML: " + fileName)
 	setSiteContext(context, fileName)
@@ -192,8 +210,25 @@ def loadXml7z(context, fileName):
 	finally:
 		process.stdout.close()
 
+
+def loadXml7zUrl(context, url):
+	print("Loading zipped XML: " + url)
+	setSiteContext(context, url)
+	process = subprocess.Popen(["7z", "e", "-so", "-bd", fileName], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+	try:
+		while line := process.stdout.readline():
+			try:
+				loadLine(line.decode('utf-8').strip(), context)
+			except:
+				print(line)
+				raise
+	finally:
+		process.stdout.close()
+
+
 context = getDefaultContext()
 try:
+	db.createSchema()
 	files = []
 	for arg in sys.argv[1:]:
 		if (re.match(r'^.*\.(xml|7z)$', arg)):
@@ -206,7 +241,10 @@ try:
 			raise Exception("Unknown argument: " + arg)
 	for file in files:
 		if (re.match(r'^.*\.xml$', file)):
-			loadXml(context, file)
+			if (re.match(r'https?\:\/\/', file)):
+				loadXmlUrl(context, file)
+			else:
+				loadXml(context, file)
 		elif (re.match(r'^.*\.7z$', file)):
 			loadXml7z(context, file)
 finally:
