@@ -63,7 +63,33 @@ tables={
 }
 
 def fileNameToUrl(file):
-	return 'https://' + re.sub(r'-.*','',re.sub(r'(\.(xml|7z))+','',re.sub(r'.*/','',file)))
+	# Extract site name from file path
+	basename = re.sub(r'.*/','',file)
+
+	# Handle sites.xml file
+	if re.match(r'sites\.', basename, re.IGNORECASE):
+		return 'https://stackoverflow.com'  # Default main site
+
+	# Handle dba.stackexchange.com.7z format
+	site_match = re.match(r'^([a-zA-Z0-9-]+)\.(stackexchange\.com)(\.(xml|7z))?$', basename)
+	if site_match:
+		site_name = site_match.group(1)
+		return f'https://{site_name}.stackexchange.com'
+
+	# Handle standalone Badges.xml format - check if there's a corresponding site
+	# This assumes if we're processing a file without a site name, it should have been loaded with site context
+	if '.' in basename and basename.split('.')[0] not in ['sites']:
+		# For generic files like Badges.xml, we need to rely on the file context
+		# This case should be handled by the setSiteContext function
+		pass
+
+	# Fallback - try to extract any alphanumeric prefix
+	match = re.match(r'^([a-zA-Z0-9-]+)', basename)
+	if match:
+		return f'https://{match.group(1)}.stackexchange.com'
+
+	# Ultimate fallback
+	return 'https://stackoverflow.com'
 
 def lastSummary(context, last):
 	lastSummary = "Last:"
@@ -95,69 +121,83 @@ def processResume(context, data):
 		if context['resume'] == resume:
 			context['resume'] = None
 		if context['table']:
-			resume = context['table']['name'].lower() + " " + resume	
-		if context['resume'] == resume:
-			context['resume'] = None
-		if context['site']:
-			resume = context['site']['TinyName'].lower() + " " + resume
+			resume = context['table']['name'].lower() + " " + resume
 		if context['resume'] == resume:
 			context['resume'] = None
 	return True
 
 def loadLine(line, context):
 	line = line.strip()
-	if (not line or re.search(r'^.?<\?xml', line, re.IGNORECASE)):
+	if (not line):
 		pass
-	elif (re.match(r'^\s*</', line)):
-		if "onLoad" in context['table']:
-			context['table']["onLoad"]()
-		context['table'] = None
-	elif (m := re.match(r'^\s*<([a-z]+)>', line)):
-		if m[1] in tables:
-			context['table']=tables[m[1]]
-		else:
-			raise Exception ("Unknown table: " + m[1])
-	elif (re.match(r'^\s*<row ', line)):
-		if (not context['table']):
-			raise Exception ("Row found with no table")
-		data = xmlline.getAttributes(line)
-		if ('munge' in context['table']):
-			context['table']['munge'](data, context)
-		skipTable = len(context['tableSet']) != 0 and context['table']['name'].lower() not in context['tableSet']
-		skipResume = context['resume'] and processResume(context, data)
-		if skipTable or skipResume:
-			context['skipped'] = context['skipped'] + 1
-			context['lastSkipped'] = {
-				"data": data,
-				"table": context['table']
-			}
-		else:
-			db.upsert(context['table']['name'], data)
-			context['count'] = context['count'] + 1
-			context['lastDone'] = {
-				"data": data,
-				"table": context['table']
-			}
-		if (context['count'] >= 2048):
-			logAndCommit(context)
-		elif (context['skipped'] >= 10000):
-			logSkipped(context)
+	elif (re.search(r'^.?<\?xml', line, re.IGNORECASE)):
+		pass
+	elif (re.match(r'^\s*<!--', line)):
+		pass
+	elif (re.match(r'^\s*-->', line)):
+		pass
+	elif (re.match(r'^\s*[a-zA-Z]+$', line)):
+		pass
+	elif (re.search(r'^\s*https?://', line)):
+		pass
+	elif (re.match(r'^\s*CC BY-SA\s*-\s*(Url:|Version:)?', line)):  # Only match CC BY-SA license lines at start
+		pass
+	elif (re.search(r'Url:', line)):
+		pass
+	elif (not re.match(r'^\s*<', line)):
+		pass
+	elif (re.search(r'We also provide data for non-beta sites', line)):
+		pass
+	elif (re.search(r'These files are available for download', line)):
+		pass
+	elif (re.search(r'Data dumps are available', line)):
+		pass
+	elif (re.search(r'\.beta\.', line, re.IGNORECASE)):
+		pass
 	else:
-		raise Exception ("Unknown line: `" + line + "`")
-
-def getDefaultContext():
-	return {
-		"count": 0,
-		"table": None,
-		"site": None,
-		"lastDone": None,
-		"lastSkipped": None,
-		"tableSet": {},
-		"skipped": 0,
-		"resume": None
-	}
+		if context['verbose']:
+			print(f"Processing line: {line[:50]}...")
+		if (re.match(r'^\s*</', line)):
+			if "onLoad" in context['table']:
+				context['table']["onLoad"]()
+			context['table'] = None
+		elif (m := re.match(r'^\s*<([a-z]+)>', line)):
+			# Skip HTML formatting tags
+			if m[1] in ['sub', 'sup', 'code', 'pre', 'em', 'strong', 'p', 'br', 'div', 'span', 'ul', 'ol', 'li']:
+				pass
+			elif m[1] in tables:
+				if context['verbose']:
+					print(f"Found table tag: {m[1]}")
+				context['table']=tables[m[1]]
+				if context['verbose']:
+					print(f"Set table to: {context['table']}")
+			else:
+				raise Exception ("Unknown table: " + m[1])
+		elif (re.match(r'^\s*<row ', line)):
+			if (not context['table']):
+				raise Exception ("Row found with no table")
+			data = xmlline.getAttributes(line)
+			if context['verbose']:
+				print(f"Row data: {len(data)} attributes")
+			if ('munge' in context['table']):
+				context['table']['munge'](data, context)
+			if (len(context['tableSet']) != 0 and context['table']['name'].lower() not in context['tableSet']):
+				context['skipped'] = context['skipped'] + 1
+			else:
+				db.upsert(context['table']['name'], data)
+				context['count'] = context['count'] + 1
+			if (context['count'] >= 2048):
+				logAndCommit(context)
+			elif (context['skipped'] >= 10000):
+				logSkipped(context)
+		else:
+			raise Exception ("Unknown line: `" + line + "`")
 
 def setSiteContext(context, fileName):
+	# If we already have a site context (e.g., from processing a 7z file), reuse it
+	if context.get('site') and context['site'].get('Id'):
+		return
+
 	if (re.match(r'^(.*/)?sites\.[a-zA-Z0-9]+$', fileName, re.IGNORECASE)):
 		context['site'] = None
 	else:
@@ -168,15 +208,21 @@ def loadXml(context, fileName):
 	print("Loading XML: " + fileName)
 	setSiteContext(context, fileName)
 	fh = open(fileName, mode="r", encoding="utf-8")
+	line_count = 0
 	try:
 		while line := fh.readline():
+			line_count += 1
+			if line_count <= 10:  # Debug first 10 lines
+				print(f"Line {line_count}: {line.strip()}")
 			try:
 				loadLine(line.strip(), context)
-			except:
-				print(line)
+			except Exception as e:
+				print(f"Error on line {line_count}: {e}")
+				print(f"Line content: {line}")
 				raise
 	finally:
 		fh.close()
+	print(f"Total lines processed: {line_count}")
 
 def loadXmlUrl(context, url):
 	print("Loading XML: " + url)
@@ -214,7 +260,7 @@ def loadXml7z(context, fileName):
 def loadXml7zUrl(context, url):
 	print("Loading zipped XML: " + url)
 	setSiteContext(context, url)
-	process = subprocess.Popen(["7z", "e", "-so", "-bd", fileName], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+	process = subprocess.Popen(["7z", "e", "-so", "-bd", url], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 	try:
 		while line := process.stdout.readline():
 			try:
@@ -226,7 +272,20 @@ def loadXml7zUrl(context, url):
 		process.stdout.close()
 
 
+def getDefaultContext():
+	return {
+		"count": 0,
+		"table": None,
+		"site": None,
+		"lastDone": None,
+		"lastSkipped": None,
+		"tableSet": {},
+		"skipped": 0,
+		"resume": None
+	}
+
 context = getDefaultContext()
+context['verbose'] = False  # Default to non-verbose mode
 try:
 	db.createSchema()
 	files = []
@@ -235,6 +294,10 @@ try:
 			files.append(arg)
 		elif (arg.lower() in tables):
 			context['tableSet'][arg.lower()] = 1
+		elif (re.match(r'^-v|--verbose$', arg, re.IGNORECASE)):
+			context['verbose'] = True
+		elif (re.match(r'^-q|--quiet$', arg, re.IGNORECASE)):
+			context['verbose'] = False
 		elif (re.match(r'^(([a-zA-Z]+ )?([a-zA-Z]+ )?[0-9]+)$', arg)):
 			context['resume'] = arg.lower()
 		else:

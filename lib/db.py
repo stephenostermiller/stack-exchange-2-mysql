@@ -1,9 +1,9 @@
-import mysql.connector
+from mysql.connector import connect
 from lib import localConfig
 import re
 
 dbConf = localConfig.getDict('mysql')
-cnx = mysql.connector.connect(
+cnx = connect(
     user=dbConf['user'],
     password=dbConf['password'],
     host=dbConf['host'],
@@ -11,7 +11,8 @@ cnx = mysql.connector.connect(
     port=dbConf['port'],
     auth_plugin=dbConf['auth_plugin'],
     charset='utf8mb4',
-    use_unicode=True
+    use_unicode=True,
+    ssl_disabled=True
 )
 
 def createSchema():
