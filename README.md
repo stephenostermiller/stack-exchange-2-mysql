@@ -38,6 +38,7 @@ This imports a Stack Exchange data dump into a MySQL database.
 
 - You can specify specific tables to load instead of loading all the tables: `./load.py /stackexchange/drones.stackexchange.com.7z Posts Users`. Data from other tables (`Badges`, `Comments`, `PostHistory`, `PostLinks`, `Tags`, and `Votes`) will be skipped.
 - If you need to interrupt the load and want to resume from where it left off, you can specify the resume point: `./load.py /stackexchange/drones.stackexchange.com.7z "drones PostHistory 4129"`
+- Control verbosity with `-v` or `--verbose` to see detailed processing information (for debugging), or `-q` or `--quiet` to suppress all debug output while keeping summary messages.
 
 ### FAQ
 
